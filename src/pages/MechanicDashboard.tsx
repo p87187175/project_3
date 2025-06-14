@@ -10,14 +10,23 @@ export default function MechanicDashboard() {
   const { user } = useAuth();
   const { complaints, updateComplaint, acceptComplaint } = useData();
   const [activeTab, setActiveTab] = useState<'available' | 'my-tasks' | 'completed'>('available');
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [acceptError, setAcceptError] = useState<string | null>(null);
 
   const availableComplaints = complaints.filter((c: Complaint) => c.status === 'open');
   const myComplaints = complaints.filter((c: Complaint) => c.accepted_by === user?.id && c.status !== 'resolved');
   const completedComplaints = complaints.filter((c: Complaint) => c.accepted_by === user?.id && c.status === 'resolved');
 
-  const handleAcceptComplaint = (complaintId: string) => {
-    if (user) {
-      acceptComplaint(complaintId, user.id, user.name);
+  const handleAcceptComplaint = async (complaintId: string) => {
+    if (!user) return;
+    setAcceptingId(complaintId);
+    setAcceptError(null);
+    try {
+      await acceptComplaint(complaintId, user.id, user.name);
+      setAcceptingId(null);
+    } catch (err: any) {
+      setAcceptError(err.message || 'Failed to accept complaint');
+      setAcceptingId(null);
     }
   };
 
@@ -81,6 +90,9 @@ export default function MechanicDashboard() {
         <div className="p-6">
           {activeTab === 'available' && (
             <div className="space-y-4">
+              {acceptError && (
+                <div className="text-red-600 font-medium mb-2">{acceptError}</div>
+              )}
               {availableComplaints.length > 0 ? (
                 <>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Complaints</h3>
@@ -90,6 +102,7 @@ export default function MechanicDashboard() {
                       complaint={complaint}
                       onAccept={() => handleAcceptComplaint(complaint.id)}
                       showActions={true}
+                      accepting={acceptingId === complaint.id}
                     />
                   ))}
                 </>

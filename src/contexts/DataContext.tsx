@@ -256,7 +256,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   const acceptComplaint = async (complaintId: string, mechanicId: string, mechanicName: string) => {
-    console.log('DataContext: acceptComplaint called with', { complaintId, mechanicId, mechanicName });
     try {
       const { error } = await supabase
         .from('complaints')

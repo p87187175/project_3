@@ -16,6 +16,7 @@ interface ComplaintCardProps {
   onResolve?: () => void;
   onEscalate?: () => void;
   showActions?: boolean;
+  accepting?: boolean;
 }
 
 export default function ComplaintCard({ 
@@ -23,7 +24,8 @@ export default function ComplaintCard({
   onAccept, 
   onResolve, 
   onEscalate, 
-  showActions = false 
+  showActions = false,
+  accepting
 }: ComplaintCardProps) {
   const getUrgencyColor = (urgency: string) => {
     switch (urgency) {
@@ -117,8 +119,16 @@ export default function ComplaintCard({
             <button
               onClick={onAccept}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              disabled={accepting}
             >
-              <CheckCircle className="h-4 w-4" />
+              {accepting ? (
+                <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+              ) : (
+                <CheckCircle className="h-4 w-4" />
+              )}
               Accept
             </button>
           )}
