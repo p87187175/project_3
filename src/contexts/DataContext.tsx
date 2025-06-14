@@ -14,6 +14,8 @@ interface DataContextType {
   getComplaintsByMachine: (machine_id: string) => Complaint[];
   getComplaintsByUser: (user_id: string) => Complaint[];
   refreshData: () => Promise<void>;
+  isLoading: boolean;
+  error: string | null;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -109,6 +111,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     escalatedComplaints: 0,
     resolvedToday: 0,
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Fetch initial data
   useEffect(() => {
@@ -198,6 +202,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, [machines, complaints]);
 
   const refreshData = async () => {
+    setIsLoading(true);
+    setError(null);
     console.log('DataContext: refreshData called');
     try {
       const [machinesResponse, complaintsResponse, escalationResponse] = await Promise.all([
@@ -217,11 +223,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setMachines(machinesResponse.data as Machine[]);
       setComplaints(complaintsResponse.data as Complaint[]);
       setEscalationHistory(escalationResponse.data as EscalationHistory[]);
-    } catch (error) {
+      setIsLoading(false);
+      setError(null);
+    } catch (error: any) {
       console.error('DataContext: Error refreshing data:', error);
       setMachines([]);
       setComplaints([]);
       setEscalationHistory([]);
+      setError(error.message || 'Failed to load data.');
+      setIsLoading(false);
     }
   };
 
@@ -297,6 +307,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       getComplaintsByMachine,
       getComplaintsByUser,
       refreshData,
+      isLoading,
+      error,
     }}>
       {children}
     </DataContext.Provider>
