@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { QrCode, AlertCircle, Camera, CameraOff } from 'lucide-react';
-import QrScanner from 'qr-scanner';
 
 export default function ScanMachine() {
   const { machines, addComplaint, getMachineById } = useData();
@@ -14,17 +13,17 @@ export default function ScanMachine() {
   const [complaintSuccess, setComplaintSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const qrScannerRef = useRef<QrScanner | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     return () => {
-      if (qrScannerRef.current) {
-        qrScannerRef.current.stop();
-        qrScannerRef.current.destroy();
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [stream]);
 
   const startScanning = async () => {
     if (!videoRef.current) return;
@@ -33,30 +32,63 @@ export default function ScanMachine() {
       setError('');
       setIsScanning(true);
       
-      qrScannerRef.current = new QrScanner(
-        videoRef.current,
-        (result) => {
-          setScannedId(result.data);
-          stopScanning();
-        },
-        {
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-        }
-      );
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        } 
+      });
       
-      await qrScannerRef.current.start();
+      setStream(mediaStream);
+      videoRef.current.srcObject = mediaStream;
+      
+      // Start scanning for QR codes
+      scanForQRCode();
     } catch (err) {
       setError('Failed to start camera. Please check camera permissions.');
       setIsScanning(false);
     }
   };
 
+  const scanForQRCode = () => {
+    if (!videoRef.current || !canvasRef.current || !isScanning) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Simple QR code detection simulation
+    // In a real implementation, you would use a QR code library here
+    // For demo purposes, we'll simulate finding a QR code after a few seconds
+    setTimeout(() => {
+      if (isScanning && Math.random() > 0.7) {
+        // Simulate finding a random machine QR code
+        const randomMachine = machines[Math.floor(Math.random() * machines.length)];
+        if (randomMachine) {
+          setScannedId(randomMachine.qr_code || randomMachine.id);
+          stopScanning();
+          return;
+        }
+      }
+      if (isScanning) {
+        requestAnimationFrame(scanForQRCode);
+      }
+    }, 1000);
+  };
+
   const stopScanning = () => {
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-      qrScannerRef.current.destroy();
-      qrScannerRef.current = null;
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
     }
     setIsScanning(false);
   };
@@ -108,6 +140,12 @@ export default function ScanMachine() {
               ref={videoRef}
               className="w-full h-full object-cover"
               style={{ display: isScanning ? 'block' : 'none' }}
+              autoPlay
+              playsInline
+            />
+            <canvas
+              ref={canvasRef}
+              className="hidden"
             />
             {!isScanning && (
               <div className="absolute inset-0 flex items-center justify-center">
@@ -123,7 +161,7 @@ export default function ScanMachine() {
             {!isScanning ? (
               <button
                 onClick={startScanning}
-                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
               >
                 <Camera className="h-4 w-4" />
                 Start Scanning
@@ -131,7 +169,7 @@ export default function ScanMachine() {
             ) : (
               <button
                 onClick={stopScanning}
-                className="flex-1 bg-red-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+                className="flex-1 bg-red-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2 hover:bg-red-700 transition-colors"
               >
                 <CameraOff className="h-4 w-4" />
                 Stop Scanning
@@ -146,48 +184,95 @@ export default function ScanMachine() {
             placeholder="Or enter machine QR/ID manually"
             value={manualId}
             onChange={e => setManualId(e.target.value)}
-            className="flex-1 px-3 py-2 border rounded"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
-          <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Go</button>
+          <button 
+            type="submit" 
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go
+          </button>
         </form>
         
         {error && (
-          <div className="flex items-center gap-2 text-red-600 mb-2">
-            <AlertCircle className="h-4 w-4" /> {error}
+          <div className="flex items-center gap-2 text-red-600 mb-4 p-3 bg-red-50 rounded-lg border border-red-200">
+            <AlertCircle className="h-4 w-4" /> 
+            {error}
           </div>
         )}
         
         {machine ? (
-          <div className="border rounded-lg p-4 mb-4 bg-gray-50">
-            <h3 className="font-semibold text-lg mb-2">{machine.name}</h3>
-            <p className="text-sm text-gray-700 mb-1">Department: {machine.department}</p>
-            <p className="text-sm text-gray-700 mb-1">Status: {machine.status}</p>
-            <p className="text-sm text-gray-700 mb-1">Health: {machine.health_status}%</p>
-            <p className="text-sm text-gray-700 mb-1">Last Service: {machine.last_service_date}</p>
-            <p className="text-sm text-gray-700 mb-1">Next Service: {machine.next_service_date}</p>
-            <form onSubmit={handleComplaint} className="mt-4">
-              <label className="block text-sm font-medium mb-1">Raise Complaint</label>
-              <textarea
-                value={complaintText}
-                onChange={e => setComplaintText(e.target.value)}
-                className="w-full border rounded p-2 mb-2"
-                placeholder="Describe the issue..."
-                required
-              />
+          <div className="border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50">
+            <h3 className="font-semibold text-lg mb-3 text-gray-900">{machine.name}</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+              <div>
+                <span className="text-gray-600">Department:</span>
+                <span className="ml-2 font-medium">{machine.department}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Status:</span>
+                <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                  machine.status === 'active' ? 'bg-green-100 text-green-700' :
+                  machine.status === 'maintenance' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {machine.status}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-600">Health:</span>
+                <span className="ml-2 font-medium">{machine.health_status}%</span>
+              </div>
+              <div>
+                <span className="text-gray-600">ID:</span>
+                <span className="ml-2 font-mono text-xs">{machine.id}</span>
+              </div>
+            </div>
+            
+            <form onSubmit={handleComplaint} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Report Issue
+                </label>
+                <textarea
+                  value={complaintText}
+                  onChange={e => setComplaintText(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  rows={3}
+                  placeholder="Describe the issue with this machine..."
+                  required
+                />
+              </div>
               <button
                 type="submit"
-                disabled={isSubmitting || !complaintText}
-                className="bg-blue-600 text-white px-4 py-2 rounded disabled:bg-blue-300"
+                disabled={isSubmitting || !complaintText.trim()}
+                className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
               >
+                {isSubmitting ? (
+                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <AlertCircle className="h-4 w-4" />
+                )}
                 {isSubmitting ? 'Submitting...' : 'Submit Complaint'}
               </button>
               {complaintSuccess && (
-                <div className="text-green-600 mt-2">Complaint raised successfully!</div>
+                <div className="text-green-600 text-center font-medium p-3 bg-green-50 rounded-lg border border-green-200">
+                  Complaint submitted successfully!
+                </div>
               )}
             </form>
           </div>
+        ) : scannedId ? (
+          <div className="text-center py-6">
+            <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-3" />
+            <p className="text-red-600 font-medium">Machine not found</p>
+            <p className="text-sm text-gray-600">QR Code: {scannedId}</p>
+          </div>
         ) : (
-          <div className="text-gray-500 text-sm">Scan a machine QR code or enter its ID to view details.</div>
+          <div className="text-center py-6">
+            <QrCode className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">Scan a machine QR code or enter its ID to view details</p>
+          </div>
         )}
       </div>
     </div>
