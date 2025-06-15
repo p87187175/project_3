@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { QrCode, AlertCircle } from 'lucide-react';
-import { QrReader } from 'react-qr-reader';
+import { QrCode, AlertCircle, Camera, CameraOff } from 'lucide-react';
+import QrScanner from 'qr-scanner';
 
 export default function ScanMachine() {
   const { machines, addComplaint, getMachineById } = useData();
@@ -13,16 +13,52 @@ export default function ScanMachine() {
   const [complaintText, setComplaintText] = useState('');
   const [complaintSuccess, setComplaintSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const qrScannerRef = useRef<QrScanner | null>(null);
 
-  const handleScan = (data: string | null) => {
-    if (data) {
-      setScannedId(data);
+  useEffect(() => {
+    return () => {
+      if (qrScannerRef.current) {
+        qrScannerRef.current.stop();
+        qrScannerRef.current.destroy();
+      }
+    };
+  }, []);
+
+  const startScanning = async () => {
+    if (!videoRef.current) return;
+    
+    try {
       setError('');
+      setIsScanning(true);
+      
+      qrScannerRef.current = new QrScanner(
+        videoRef.current,
+        (result) => {
+          setScannedId(result.data);
+          stopScanning();
+        },
+        {
+          highlightScanRegion: true,
+          highlightCodeOutline: true,
+        }
+      );
+      
+      await qrScannerRef.current.start();
+    } catch (err) {
+      setError('Failed to start camera. Please check camera permissions.');
+      setIsScanning(false);
     }
   };
 
-  const handleError = (err: any) => {
-    setError('QR scan error');
+  const stopScanning = () => {
+    if (qrScannerRef.current) {
+      qrScannerRef.current.stop();
+      qrScannerRef.current.destroy();
+      qrScannerRef.current = null;
+    }
+    setIsScanning(false);
   };
 
   const handleManualSubmit = (e: React.FormEvent) => {
@@ -65,14 +101,45 @@ export default function ScanMachine() {
         <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
           <QrCode className="h-6 w-6 text-blue-600" /> Scan Machine QR
         </h2>
+        
         <div className="mb-4">
-          <QrReader
-            delay={300}
-            onError={handleError}
-            onScan={handleScan}
-            style={{ width: '100%' }}
-          />
+          <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ aspectRatio: '1' }}>
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              style={{ display: isScanning ? 'block' : 'none' }}
+            />
+            {!isScanning && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="text-center">
+                  <QrCode className="h-16 w-16 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">Camera preview will appear here</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex gap-2 mt-2">
+            {!isScanning ? (
+              <button
+                onClick={startScanning}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+              >
+                <Camera className="h-4 w-4" />
+                Start Scanning
+              </button>
+            ) : (
+              <button
+                onClick={stopScanning}
+                className="flex-1 bg-red-600 text-white px-4 py-2 rounded flex items-center justify-center gap-2"
+              >
+                <CameraOff className="h-4 w-4" />
+                Stop Scanning
+              </button>
+            )}
+          </div>
         </div>
+
         <form onSubmit={handleManualSubmit} className="mb-4 flex gap-2">
           <input
             type="text"
@@ -83,11 +150,13 @@ export default function ScanMachine() {
           />
           <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Go</button>
         </form>
+        
         {error && (
           <div className="flex items-center gap-2 text-red-600 mb-2">
             <AlertCircle className="h-4 w-4" /> {error}
           </div>
         )}
+        
         {machine ? (
           <div className="border rounded-lg p-4 mb-4 bg-gray-50">
             <h3 className="font-semibold text-lg mb-2">{machine.name}</h3>
@@ -123,4 +192,4 @@ export default function ScanMachine() {
       </div>
     </div>
   );
-} 
+}
