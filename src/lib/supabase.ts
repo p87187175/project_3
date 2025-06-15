@@ -50,7 +50,7 @@ export const testConnection = async () => {
     if (machinesError) throw machinesError;
     console.log('Database connection successful:', machinesData);
 
-    // Test realtime (subscribe only once, then unsubscribe)
+    // Test realtime (subscribe only once, then unsubscribe and remove)
     const channel = supabase.channel('test-channel');
     let subscribed = false;
     await new Promise((resolve) => {
@@ -59,6 +59,7 @@ export const testConnection = async () => {
           subscribed = true;
           console.log('Realtime connection status:', status);
           channel.unsubscribe();
+          supabase.removeChannel(channel);
           resolve(true);
         }
       });
@@ -69,4 +70,4 @@ export const testConnection = async () => {
     console.error('Connection test failed:', error);
     return false;
   }
-}; 
+};
